@@ -2,6 +2,14 @@ const puppeteer = require('puppeteer');
 
 const DBUS_BASE_URL = 'https://dbus.eus/';
 
+/**
+ * Fetches the stops for a given bus line code.
+ *
+ * @param {string} line_code - The code of the bus line to fetch stops for.
+ * @returns {Promise<{security: string, stops: Array<{code: string, name: string, internal_id: string}>}>} 
+ * An object containing the security code and an array of stops with their code, name, and internal ID.
+ * @throws Will throw an error if the line code is not found or if there is an issue with the Puppeteer operations.
+ */
 async function getLineStops(line_code) {
   const browser = await puppeteer.launch({ headless: true });
   try {
@@ -66,6 +74,18 @@ async function getLineStops(line_code) {
   }
 }
 
+/**
+ * Fetches bus lines from the DBUS website.
+ *
+ * This function uses Puppeteer to navigate to the DBUS website, accept cookies,
+ * reload the page, and extract bus line options from a dropdown menu.
+ *
+ * @async
+ * @function getBusLines
+ * @returns {Promise<Array<{code: string, name: string, url: string, internal_id: string}>>} 
+ * An array of objects representing bus lines, each containing a code, name, URL, and internal ID.
+ * @throws {Error} If there is an issue with the Puppeteer operations or page interactions.
+ */
 async function getBusLines() {
   const browser = await puppeteer.launch({ headless: true });
   try {
