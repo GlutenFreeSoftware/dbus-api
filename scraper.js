@@ -97,6 +97,13 @@ export async function getLineStops(line_code) {
  * @throws {Error} If there is an issue with the Puppeteer operations or page interactions.
  */
 export async function getBusLines() {
+  const cacheKey = 'bus_lines';
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return cachedData;
+  }
+
   const browser = await puppeteer.launch({ headless: true });
   try {
     const page = await browser.newPage();
@@ -128,6 +135,7 @@ export async function getBusLines() {
         });
     });
 
+    await setCache(cacheKey, options);
     return options;
   } catch (error) {
     console.error('Error in getBusLines:', error);
