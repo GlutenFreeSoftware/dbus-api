@@ -34,17 +34,6 @@ app.get('/bus-time/:lineNumber/:stopId', async (req, res) => {
     }
 });
 
-// Testing
-app.get('/security/:lineNumber', async (req, res) => {
-    try {
-        const lineNumber = parseInt(req.params.lineNumber, 10);
-        const securityCode = await securityCode(lineNumber);
-        res.json({ securityCode });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch security code' });
-    }
-});
-
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });

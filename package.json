@@ -12,6 +12,7 @@
   "type": "module",
   "dependencies": {
     "express": "^4.21.2",
+    "jsdom": "^26.0.0",
     "puppeteer": "^24.2.1"
   },
   "devDependencies": {

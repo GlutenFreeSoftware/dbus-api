@@ -1,7 +1,9 @@
 import puppeteer from 'puppeteer';
 import { getCache, setCache } from './cache.js';
+import { JSDOM } from 'jsdom';
 
 const DBUS_BASE_URL = 'https://dbus.eus/';
+const DBUS_AJAX_URL = 'https://dbus.eus/wp-admin/admin-ajax.php';
 
 /**
  * Fetches the stops for a given bus line code.
@@ -149,11 +151,62 @@ export async function getBusLines() {
  * Fetches the next bus time at a given stop for a given bus line.
  *
  * @param {number} line_number - The number of the bus line.
- * @param {string} stop_id - The internal ID of the bus stop.
+ * @param {string} stop_code - The internal ID of the bus stop.
  * @returns {Promise<string>} The next bus time at the given stop for the given bus line.
  * @throws Will throw an error if there is an issue with the Puppeteer operations.
  */
-export async function getBusTimeAtStop(line_number, stop_id) {
-  // TODO: Implement this function
-  return 'Not implemented';
+export async function getBusTimeAtStop(line_number, stop_code) {
+  
+  // Parameter initialization
+  const now = new Date();
+  const day = now.getDate();
+  const month = now.getMonth() + 1; // Months are zero-based
+  const year = now.getFullYear();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+
+  const { security, stops } = await getLineStops(line_number.toString());
+  const stop = stops.find(s => s.code === stop_code);
+
+  if (!stop) {
+    throw new Error(`Stop with ID ${stop_code} not found`);
+  }
+
+  // Fetch the DBUS AJAX endpoint
+  const response = await fetch(DBUS_AJAX_URL, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+        action: 'calcula_parada',
+        security: security, // Dynamically fetched security code
+        linea: line_number.toString(),
+        parada: stop.internal_id,
+        dia: day.toString().padStart(2, '0'),
+        mes: month.toString().padStart(2, '0'),
+        year: year.toString(),
+        hora: hour.toString().padStart(2, '0'),
+        minuto: minute.toString().padStart(2, '0')
+    })
+  });
+
+  // Parsing the response
+  const result = await response.text();
+  const dom = new JSDOM(result);
+  const doc = dom.window.document;
+  const nextBusTimes = [];
+
+  const listItems = Array.from(doc.querySelectorAll('#prox_lle ul li')).map(item => item.textContent.trim());
+  const requestedLine = listItems.find(item => item.includes(`Linea ${line_number}:`));
+  
+  if (!requestedLine) {
+    throw new Error('Bus time not found');
+  }
+  
+  const match = requestedLine.match(/(\d+)\s*min/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  throw new Error('Bus time not found');
 }
