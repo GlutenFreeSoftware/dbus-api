@@ -1,9 +1,11 @@
 import express from 'express';
 import { getBusLines, getLineStops, getBusTimeAtStop } from './scraper.js';
+import dotenv from 'dotenv';
 
 const app = express();
+dotenv.config();
 
-const PORT = 3000;
+const PORT = process.env.PORT || 8080;
 
 app.get('/lines', async (req, res) => {
     try {
