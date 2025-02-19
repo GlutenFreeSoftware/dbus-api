@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CACHE_DIR = path.join(__dirname, 'cache');
-const CACHE_EXPIRY = 1000 * 60 * 60; // 1 hour
+const CACHE_EXPIRY = 1000 * 60 * 60 * 24; // 1 day
 
 async function ensureCacheDir() {
     try {

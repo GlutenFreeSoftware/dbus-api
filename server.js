@@ -5,32 +5,30 @@ const app = express();
 
 const PORT = 3000;
 
-app.get('/bus-lines', async (req, res) => {
+app.get('/lines', async (req, res) => {
     try {
         const busLines = await getBusLines();
         res.json(busLines);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch bus lines' });
+        res.status(500).json({ error: `${error.message}` });
     }
 });
 
-app.get('/bus-stops/:lineCode', async (req, res) => {
+app.get('/stops/:lineCode', async (req, res) => {
     try {
         const busStops = await getLineStops(req.params.lineCode);
         res.json(busStops);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch bus stops' });
+        res.status(500).json({ error: `${error.message}` });
     }
 });
 
-app.get('/bus-time/:lineNumber/:stopId', async (req, res) => {
+app.get('/arrival/:lineNumber/:stopCode', async (req, res) => {
     try {
-        const lineNumber = parseInt(req.params.lineNumber, 10);
-        const stopId = req.params.stopId;
-        const busTime = await getBusTimeAtStop(lineNumber, stopId);
+        const busTime = await getBusTimeAtStop(req.params.lineNumber, req.params.stopCode);
         res.json({ time: busTime });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch bus time' });
+        res.status(500).json({ error: `${error.message}` });
     }
 });
 

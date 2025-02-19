@@ -147,13 +147,14 @@ export async function getBusLines() {
   }
 }
 
+
 /**
- * Fetches the next bus time at a given stop for a given bus line.
+ * Fetches the next bus arrival time at a specific stop for a given line number.
  *
- * @param {number} line_number - The number of the bus line.
- * @param {string} stop_code - The internal ID of the bus stop.
- * @returns {Promise<string>} The next bus time at the given stop for the given bus line.
- * @throws Will throw an error if there is an issue with the Puppeteer operations.
+ * @param {number|string} line_number - The bus line number.
+ * @param {number|string} stop_code - The code of the bus stop.
+ * @returns {Promise<number>} - The number of minutes until the next bus arrives.
+ * @throws {Error} - Throws an error if the stop is not found or if the bus time cannot be retrieved.
  */
 export async function getBusTimeAtStop(line_number, stop_code) {
   
@@ -199,11 +200,9 @@ export async function getBusTimeAtStop(line_number, stop_code) {
 
   const listItems = Array.from(doc.querySelectorAll('#prox_lle ul li')).map(item => item.textContent.trim());
   const requestedLine = listItems.find(item => item.includes(`Linea ${line_number}:`));
-  
   if (!requestedLine) {
     throw new Error('Bus time not found');
   }
-  
   const match = requestedLine.match(/(\d+)\s*min/);
   if (match) {
     return parseInt(match[1], 10);
