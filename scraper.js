@@ -1,0 +1,115 @@
+const puppeteer = require('puppeteer');
+
+const DBUS_BASE_URL = 'https://dbus.eus/';
+
+async function getLineStops(line_code) {
+  const browser = await puppeteer.launch({ headless: true });
+  try {
+    const busLines = await getBusLines();
+    const lineData = busLines.find(busLine => busLine.code.toString() === line_code.toString());
+    if (!lineData) {
+      throw new Error(`Line with code ${line_code} not found`);
+    }
+    const line_url = lineData.url;
+
+    const page = await browser.newPage();
+    await page.goto(line_url);
+
+    // Aceptar cookies
+    await page.waitForSelector('.cmplz-btn.cmplz-accept');
+    await page.click('.cmplz-btn.cmplz-accept');
+
+    // Recargar la página para que el `select` aparezca
+    await page.reload();
+
+    // Esperar a que el `select` se cargue
+    await page.waitForSelector('#select_paradas_1');
+
+    // Obtener el código de seguridad
+    const securityCode = await page.evaluate(() => {
+      let security = null;
+      const scriptTags = Array.from(document.querySelectorAll('script'));
+      
+      scriptTags.forEach(script => {
+        if (script.textContent.includes('security')) {
+          const match = script.textContent.match(/security:\s*'(\w+)'/);
+          if (match) {
+            security = match[1];
+          }
+        }
+      });
+
+      return security;
+    });
+
+    // Extraer las opciones del select
+    const response = await page.evaluate(() => {
+      const select = document.querySelector('#select_paradas_1');
+      return Array.from(select.options)
+        .filter(option => option.textContent.includes('|'))
+        .map(option => {
+          const [code, name] = option.textContent.split(' | ');
+          return {
+              code,
+              name,
+              internal_id: option.value
+          };
+        });
+    });
+
+    return { security: securityCode, stops: response };
+  } catch (error) {
+    console.error('Error in getLineStops:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+async function getBusLines() {
+  const browser = await puppeteer.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.goto(DBUS_BASE_URL);
+
+    // Aceptar cookies
+    await page.waitForSelector('.cmplz-btn.cmplz-accept');
+    await page.click('.cmplz-btn.cmplz-accept');
+
+    // Recargar la página para que el `select` aparezca
+    await page.reload();
+
+    // Esperar a que el `select` se cargue
+    await page.waitForSelector('#desplegable-lineas');
+
+    // Extraer las opciones del select
+    const options = await page.evaluate(() => {
+      const select = document.querySelector('#desplegable-lineas');
+      return Array.from(select.options)
+        .filter(option => option.textContent.includes('|'))
+        .map(option => {
+          const [code, name] = option.textContent.split(' | ');
+          return {
+            code,
+            name,
+            url: option.getAttribute('enlace'),
+            internal_id: option.value
+          };
+        });
+    });
+
+    return options;
+  } catch (error) {
+    console.error('Error in getBusLines:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+module.exports = {
+  getLineStops,
+  getBusLines,
+};
+
+
