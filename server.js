@@ -1,5 +1,5 @@
-const express = require('express');
-const { getBusLines, getLineStops, getBusTimeAtStop, securityCode } = require('./scraper');
+import express from 'express';
+import { getBusLines, getLineStops, getBusTimeAtStop } from './scraper.js';
 
 const app = express();
 

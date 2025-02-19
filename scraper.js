@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+import puppeteer from 'puppeteer';
+import { getCache, setCache } from './cache.js';
 
 const DBUS_BASE_URL = 'https://dbus.eus/';
 
@@ -10,7 +11,14 @@ const DBUS_BASE_URL = 'https://dbus.eus/';
  * An object containing the security code and an array of stops with their code, name, and internal ID.
  * @throws Will throw an error if the line code is not found or if there is an issue with the Puppeteer operations.
  */
-async function getLineStops(line_code) {
+export async function getLineStops(line_code) {
+  const cacheKey = `line_stops_${line_code}`;
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return cachedData;
+  }
+
   const browser = await puppeteer.launch({ headless: true });
   try {
     const busLines = await getBusLines();
@@ -46,7 +54,7 @@ async function getLineStops(line_code) {
           }
         }
       });
-
+      
       return security;
     });
 
@@ -65,7 +73,9 @@ async function getLineStops(line_code) {
         });
     });
 
-    return { security: securityCode, stops: response };
+    const result = { security: securityCode, stops: response };
+    await setCache(cacheKey, result);
+    return result;
   } catch (error) {
     console.error('Error in getLineStops:', error);
     throw error;
@@ -86,7 +96,7 @@ async function getLineStops(line_code) {
  * An array of objects representing bus lines, each containing a code, name, URL, and internal ID.
  * @throws {Error} If there is an issue with the Puppeteer operations or page interactions.
  */
-async function getBusLines() {
+export async function getBusLines() {
   const browser = await puppeteer.launch({ headless: true });
   try {
     const page = await browser.newPage();
@@ -127,9 +137,15 @@ async function getBusLines() {
   }
 }
 
-module.exports = {
-  getLineStops,
-  getBusLines,
-};
-
-
+/**
+ * Fetches the next bus time at a given stop for a given bus line.
+ *
+ * @param {number} line_number - The number of the bus line.
+ * @param {string} stop_id - The internal ID of the bus stop.
+ * @returns {Promise<string>} The next bus time at the given stop for the given bus line.
+ * @throws Will throw an error if there is an issue with the Puppeteer operations.
+ */
+export async function getBusTimeAtStop(line_number, stop_id) {
+  // TODO: Implement this function
+  return 'Not implemented';
+}
