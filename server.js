@@ -35,5 +35,6 @@ app.get('/arrival/:lineNumber/:stopCode', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log('Server started');
+    console.log(`Listening on http://localhost:${PORT}`);
 });
