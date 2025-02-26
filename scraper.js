@@ -21,7 +21,11 @@ export async function getLineStops(line_code) {
     return cachedData;
   }
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
   try {
     const busLines = await getBusLines();
     const lineData = busLines.find(busLine => busLine.code.toString() === line_code.toString());
@@ -106,7 +110,11 @@ export async function getBusLines() {
     return cachedData;
   }
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
   try {
     const page = await browser.newPage();
     await page.goto(DBUS_BASE_URL);
