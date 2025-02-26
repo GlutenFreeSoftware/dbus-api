@@ -165,7 +165,6 @@ export async function getBusLines() {
  * @throws {Error} - Throws an error if the stop is not found or if the bus time cannot be retrieved.
  */
 export async function getBusTimeAtStop(line_number, stop_code) {
-  
   // Parameter initialization
   const now = new Date();
   const day = now.getDate();
@@ -211,15 +210,21 @@ export async function getBusTimeAtStop(line_number, stop_code) {
   if (!requestedLine) {
     throw new Error('Bus time not found');
   }
-  const match = requestedLine.match(/(\d{2}:\d{2})/);
-  console.debug(match);
-  if (match) {
+
+  // Match both formats: "HH:MM" and "X min"
+  const timeMatch = requestedLine.match(/(\d{2}:\d{2})/);
+  const minutesMatch = requestedLine.match(/(\d+)\s*min/);
+
+  if (timeMatch) {
     // Calculate how much time is left until the bus arrives
-    const [hours, minutes] = match[1].split(':').map(Number);
+    const [hours, minutes] = timeMatch[1].split(':').map(Number);
     const busTime = new Date(year, month - 1, day, hours, minutes);
     const timeDiff = busTime - now;
     const minutesDiff = Math.floor(timeDiff / 60000);
     return minutesDiff;
+  } else if (minutesMatch) {
+    return parseInt(minutesMatch[1], 10);
   }
+
   throw new Error('Bus time not found');
 }
