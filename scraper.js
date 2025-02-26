@@ -38,8 +38,12 @@ export async function getLineStops(line_code) {
     await page.goto(line_url);
 
     // Aceptar cookies
-    await page.waitForSelector('.cmplz-btn.cmplz-accept');
-    await page.click('.cmplz-btn.cmplz-accept');
+    try {
+      await page.waitForSelector('.cmplz-btn.cmplz-accept');
+      await page.click('.cmplz-btn.cmplz-accept');
+    } catch (error) {
+      console.warn('Unable to accept cookies:', error);
+    }
 
     // Recargar la página para que el `select` aparezca
     await page.reload();
@@ -120,8 +124,12 @@ export async function getBusLines() {
     await page.goto(DBUS_BASE_URL);
 
     // Aceptar cookies
-    await page.waitForSelector('.cmplz-btn.cmplz-accept');
-    await page.click('.cmplz-btn.cmplz-accept');
+    try {
+      await page.waitForSelector('.cmplz-btn.cmplz-accept');
+      await page.click('.cmplz-btn.cmplz-accept');
+    } catch (error) {
+      console.warn('Unable to accept cookies:', error);
+    }
 
     // Recargar la página para que el `select` aparezca
     await page.reload();
