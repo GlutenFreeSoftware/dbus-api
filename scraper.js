@@ -211,9 +211,15 @@ export async function getBusTimeAtStop(line_number, stop_code) {
   if (!requestedLine) {
     throw new Error('Bus time not found');
   }
-  const match = requestedLine.match(/(\d+)\s*min/);
+  const match = requestedLine.match(/(\d{2}:\d{2})/);
+  console.debug(match);
   if (match) {
-    return parseInt(match[1], 10);
+    // Calculate how much time is left until the bus arrives
+    const [hours, minutes] = match[1].split(':').map(Number);
+    const busTime = new Date(year, month - 1, day, hours, minutes);
+    const timeDiff = busTime - now;
+    const minutesDiff = Math.floor(timeDiff / 60000);
+    return minutesDiff;
   }
   throw new Error('Bus time not found');
 }
