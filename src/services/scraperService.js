@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import { JSDOM } from 'jsdom';
 import cacheService from './cacheService.js';
+import logger from '../utils/logger.js';
 
 const DBUS_BASE_URL = 'https://dbus.eus/';
 const DBUS_AJAX_URL = 'https://dbus.eus/wp-admin/admin-ajax.php';
@@ -14,20 +15,40 @@ class ScraperService {
     }
 
     async getBrowser() {
-        return await puppeteer.launch(this.browserConfig);
+        const start = Date.now();
+        try {
+            const browser = await puppeteer.launch(this.browserConfig);
+            const duration = Date.now() - start;
+            logger.debug('Browser launched successfully', { duration });
+            return browser;
+        } catch (error) {
+            logger.error('Failed to launch browser', error, { 
+                config: this.browserConfig,
+                duration: Date.now() - start
+            });
+            throw error;
+        }
     }
 
     async acceptCookies(page) {
+        const start = Date.now();
         try {
             await page.waitForSelector('.cmplz-btn.cmplz-accept', { timeout: 5000 });
             await page.click('.cmplz-btn.cmplz-accept');
+            logger.debug('Cookies accepted successfully', { 
+                duration: Date.now() - start 
+            });
         } catch (error) {
-            console.warn('Unable to accept cookies:', error.message);
+            logger.warn('Unable to accept cookies', { 
+                error: error.message,
+                duration: Date.now() - start
+            });
         }
     }
 
     async getBusLines() {
         const cacheKey = 'bus_lines';
+        const operationStart = Date.now();
         const cachedData = await cacheService.get(cacheKey);
 
         if (cachedData) {

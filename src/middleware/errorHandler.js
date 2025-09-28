@@ -1,5 +1,16 @@
+import logger from '../utils/logger.js';
+
 export const errorHandler = (err, req, res, next) => {
-    console.error('Error:', err);
+    // Log the error with request context
+    logger.error('Request error occurred', err, {
+        method: req.method,
+        url: req.url,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent'),
+        body: req.body,
+        params: req.params,
+        query: req.query
+    });
 
     const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -23,6 +34,13 @@ export const errorHandler = (err, req, res, next) => {
 };
 
 export const notFoundHandler = (req, res) => {
+    logger.warn('404 - Route not found', {
+        method: req.method,
+        url: req.url,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent')
+    });
+
     res.status(404).json({
         success: false,
         error: {
