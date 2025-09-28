@@ -1,136 +1,207 @@
-# dbus API
+# DBUS API
 
-An unofficial REST API to access dbus (Donostia/San Sebastián public transportation system) information using web scraping.
+A RESTful API for accessing Donostia bus information using web scraping.
 
-> [!WARNING]
-> This project is currently in early development stage. The API may be unstable, endpoints might change, and some features may not work as expected. Use at your own risk in production environments.
+## Features
 
-## ✨ Features
+- 🚌 Get all available bus lines
+- � Get stops for specific bus lines
+- ⏰ Get real-time bus arrival times
+- � Built-in caching for better performance
+- 🔒 Security middleware (Helmet, CORS, Rate limiting)
+- 🏗️ Clean, maintainable architecture
 
-- 🚌 **Get bus lines**: List all available bus lines
-- 🚏 **Query stops**: Get stops for a specific line
-- ⏱️ **Real-time schedules**: Check the arrival time of the next bus
+## API Endpoints
 
-## 🚀 Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/GlutenFreeSoftware/dbus-api.git
-cd dbus-api
+### Base URL
+```
+http://localhost:80
 ```
 
+### Health Check
+```http
+GET /health
+```
+
+Returns the API status and timestamp.
+
+### Get All Bus Lines
+```http
+GET /api/v1/lines
+```
+
+Returns all available bus lines with their codes, names, and internal IDs.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "code": "05",
+      "name": "Benta Berri",
+      "url": "https://dbus.eus/05-benta-berri/",
+      "internal_id": "1"
+    },
+    ...
+  ],
+  "count": 42
+}
+```
+
+### Get Line Stops
+```http
+GET /api/v1/lines/:lineCode
+```
+
+Returns all stops for a specific bus line.
+
+**Parameters:**
+- `lineCode` - The bus line code (e.g., "27", "28")
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "security": "87c4dfb1f7",
+    "stops": [
+      {
+        "code": "79",
+        "name": "Boulevard 13",
+        "internal_id": "2378"
+      },
+      ...
+    ]
+  }
+}
+```
+
+### Get Bus Arrival Time
+```http
+GET /api/v1/lines/:lineCode/:stopCode
+```
+
+Returns the estimated arrival time for a specific bus at a specific stop.
+
+**Parameters:**
+- `lineCode` - The bus line code (e.g., "27", "28")
+- `stopCode` - The stop code
+
+### Get Bus Arrival Time
+```http
+GET /api/v1/lines/:lineCode/stops/:stopCode/arrival
+```
+
+Returns the estimated arrival time for a specific bus at a specific stop.
+
+**Parameters:**
+- `lineCode` - The bus line code (e.g., "27", "28")
+- `stopCode` - The stop code
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "line": "26",
+    "stop": "08",
+    "arrival_time": 17,
+    "unit": "minutes"
+  }
+}
+```
+
+## Project Structure
+
+```
+src/
+├── config/
+│   └── environment.js          # Environment configuration
+├── controllers/
+│   ├── lineController.js       # Bus line endpoints logic
+│   └── stopController.js       # Bus stop endpoints logic
+├── middleware/
+│   └── errorHandler.js         # Error handling middleware
+├── routes/
+│   ├── api/
+│   │   └── v1/
+│   │       ├── index.js        # API v1 routes
+│   │       ├── lines.js        # Lines routes
+│   │       └── stops.js        # Stops routes
+│   └── index.js                # Main routes
+├── services/
+│   ├── cacheService.js         # Caching functionality
+│   └── scraperService.js       # Web scraping logic
+└── app.js                      # Express app configuration
+```
+
+## Installation
+
+1. Clone the repository
 2. Install dependencies:
-```bash
-npm install
-```
+   ```bash
+   npm install
+   ```
 
-3. Configure environment variables (optional):
-```bash
-cp .env.example .env
-# Edit the .env file if necessary
-```
-- `PORT`: Port on which the server will run (default: 80)
+## Usage
 
-## 🏃‍♂️ Usage
-
-### Development mode
+### Development
 ```bash
 npm run dev
 ```
 
-### Production mode
+### Production
 ```bash
 npm start
 ```
 
-The server will run on port 80 by default, or on the port specified in the `PORT` environment variable.
+## Environment Variables
 
-## 📚 API Endpoints
+Create a `.env` file in the root directory:
 
-### GET `/lines`
-Gets all available bus lines.
+```env
+PORT=80
+NODE_ENV=development
+CACHE_EXPIRY=3600000
+RATE_LIMIT_WINDOW=900000
+RATE_LIMIT_MAX=100
+```
 
-**Response:**
+## Dependencies
+
+- **express** - Web framework
+- **puppeteer** - Web scraping
+- **jsdom** - HTML parsing
+- **cors** - Cross-origin resource sharing
+- **helmet** - Security middleware
+- **express-rate-limit** - Rate limiting
+- **dotenv** - Environment variables
+
+## Error Handling
+
+The API returns standardized error responses:
+
 ```json
-[
-  {
-    "code": "27",
-    "name": "Altza-Intxaurrondo-Antiguo-Gros",
-    "url": "https://dbus.eus/27-altza-intxaurrondo-antiguo-gros/",
-    "internal_id": "24"
+{
+  "success": false,
+  "error": {
+    "message": "Error description"
   }
-]
-```
-
-### GET `/stops/:lineCode`
-Gets all stops for a specific line.
-
-**Parameters:**
-- `lineCode`: Line code (e.g., "05", "27", "B1")
-
-**Response:**
-```json
-{
-  "security": "87c4dfb1f7",
-  "stops": [
-    {
-      "code": "395",
-      "name": "Larratxo III",
-      "internal_id": "3178"
-    }
-  ]
 }
 ```
 
-### GET `/arrival/:lineNumber/:stopCode`
-Gets the arrival time of the next bus at a specific stop.
+## Rate Limiting
 
-**Parameters:**
-- `lineNumber`: Line number
-- `stopCode`: Stop code
+- Window: 15 minutes (default)
+- Max requests: 100 per window (default)
 
-**Response:**
-```json
-{
-  "time": 5
-}
-```
-*Time is returned in minutes.*
+## Caching
 
-## 🔧 Development
+- Cache expiry: 1 hour (default)
+- Cached data stored in `cache/` directory
+- Automatic cache invalidation
 
-### Main function structure
+## License
 
-- `getBusLines()`: Gets all bus lines
-- `getLineStops(lineCode)`: Gets stops for a specific line
-- `getBusTimeAtStop(lineNumber, stopCode)`: Gets bus arrival time
-
-### Available scripts
-
-- `npm run dev`: Runs the server in development mode with nodemon
-- `npm run postinstall`: Installs necessary browsers for Puppeteer
-
-## ⚠️ Limitations and considerations
-
-- This is an **unofficial** API that depends on web scraping the dbus site
-- Changes to the official website structure may affect functionality
-- A caching system is included to avoid overloading the original server
-- Puppeteer requires additional system resources to run Chrome
-
-## 🤝 Contributing
-
-Contributions are welcome. Please:
-
-1. Fork the project
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is under the ISC License.
-
-## ⚖️ Disclaimer
-
-This API is not affiliated with dbus or the Donostia/San Sebastián City Council. It is an independent project created to facilitate access to public transportation information.
+ISC
