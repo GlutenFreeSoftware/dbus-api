@@ -46,6 +46,25 @@ class ScraperService {
         }
     }
 
+    async getSecurityCode() {
+        const cacheKey = 'security_code';
+        const cachedSecurity = await cacheService.get(cacheKey);
+
+        if (cachedSecurity) {
+            logger.debug('Security code retrieved from cache');
+            return cachedSecurity;
+        }
+
+        // If not cached, we'll fetch it and cache it during getLineStops
+        return null;
+    }
+
+    async setSecurityCode(securityCode) {
+        const cacheKey = 'security_code';
+        await cacheService.set(cacheKey, securityCode);
+        logger.debug('Security code cached');
+    }
+
     async getBusLines() {
         const cacheKey = 'bus_lines';
         const operationStart = Date.now();
@@ -167,9 +186,14 @@ class ScraperService {
                     });
             });
 
-            const result = { security: securityCode, stops };
-            await cacheService.set(cacheKey, result);
-            return result;
+            // Cache security code separately (global for all lines)
+            if (securityCode) {
+                await this.setSecurityCode(securityCode);
+            }
+
+            // Cache only the stops data (without security code)
+            await cacheService.set(cacheKey, stops);
+            return stops;
         } finally {
             await browser.close();
         }
@@ -183,11 +207,26 @@ class ScraperService {
         const hour = now.getHours();
         const minute = now.getMinutes();
 
-        const { security, stops } = await this.getLineStops(lineNumber.toString());
+        const stops = await this.getLineStops(lineNumber.toString());
         const stop = stops.find(s => s.code === stopCode);
 
         if (!stop) {
             throw new Error(`Stop with ID ${stopCode} not found`);
+        }
+
+        // Get security code from global cache
+        let security = await this.getSecurityCode();
+        
+        // If security code is not cached, we need to fetch it
+        if (!security) {
+            // This should trigger a fresh scrape that will cache the security code
+            await cacheService.invalidate(`line_stops_${lineNumber}`);
+            await this.getLineStops(lineNumber.toString());
+            security = await this.getSecurityCode();
+            
+            if (!security) {
+                throw new Error('Security code not found');
+            }
         }
 
         const response = await fetch(DBUS_AJAX_URL, {
