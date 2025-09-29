@@ -11,16 +11,32 @@ class CacheService {
     constructor() {
         this.cacheDir = path.join(__dirname, '../../cache');
         this.cacheExpiry = config.cacheExpiry;
+        this.initialized = false;
+        this.initPromise = null;
         this.ensureCacheDir();
     }
 
     async ensureCacheDir() {
-        try {
-            await fs.access(this.cacheDir);
-            logger.debug('Cache directory exists', { dir: this.cacheDir });
-        } catch (err) {
-            logger.info('Creating cache directory', { dir: this.cacheDir });
-            await fs.mkdir(this.cacheDir, { recursive: true });
+        if (this.initialized) return;
+        if (this.initPromise) return this.initPromise;
+        
+        this.initPromise = (async () => {
+            try {
+                await fs.access(this.cacheDir);
+                logger.debug('Cache directory exists', { dir: this.cacheDir });
+            } catch (err) {
+                logger.info('Creating cache directory', { dir: this.cacheDir });
+                await fs.mkdir(this.cacheDir, { recursive: true });
+            }
+            this.initialized = true;
+        })();
+        
+        return this.initPromise;
+    }
+
+    async waitForInit() {
+        if (!this.initialized) {
+            await this.ensureCacheDir();
         }
     }
 
@@ -40,6 +56,7 @@ class CacheService {
     }
 
     async get(key) {
+        await this.waitForInit();
         const start = Date.now();
         const filePath = this.getCacheFilePath(key);
         
@@ -73,11 +90,16 @@ class CacheService {
     }
 
     async set(key, data) {
+        await this.waitForInit();
         const start = Date.now();
         const filePath = this.getCacheFilePath(key);
         
         try {
             const jsonData = JSON.stringify(data, null, 2);
+            
+            // Ensure cache directory exists right before writing
+            await fs.mkdir(path.dirname(filePath), { recursive: true });
+            
             await fs.writeFile(filePath, jsonData, 'utf-8');
             
             const duration = Date.now() - start;
@@ -97,6 +119,7 @@ class CacheService {
     }
 
     async invalidate(key) {
+        await this.waitForInit();
         const start = Date.now();
         const filePath = this.getCacheFilePath(key);
         
@@ -117,6 +140,7 @@ class CacheService {
     }
 
     async clear() {
+        await this.waitForInit();
         const start = Date.now();
         
         try {
