@@ -1,0 +1,392 @@
+openapi: 3.1.0
+info:
+  title: DBUS API
+  description: RESTful API for accessing Donostia bus information
+  version: 1.0.0
+  contact:
+    name: GitHub Repository
+    url: https://github.com/GlutenFreeSoftware/dbus-api
+  license:
+    name: ISC
+    url: https://opensource.org/licenses/ISC
+
+servers:
+  - url: http://localhost:80
+    description: Local development server
+  - url: http://localhost:3000
+    description: Alternative development port
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check if the API is running and responsive
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/lines:
+    get:
+      summary: Get all bus lines
+      description: Retrieve all available bus lines in the Donostia bus system
+      operationId: getBusLines
+      tags:
+        - Lines
+      responses:
+        '200':
+          description: List of bus lines retrieved successfully
+          headers:
+            X-Cache-Status:
+              description: Cache hit or miss status
+              schema:
+                type: string
+                enum: [HIT, MISS]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusLinesResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/lines/{lineCode}:
+    get:
+      summary: Get stops for a bus line
+      description: Retrieve all stops for a specific bus line
+      operationId: getLineStops
+      tags:
+        - Lines
+      parameters:
+        - name: lineCode
+          in: path
+          required: true
+          description: Bus line code (e.g., "26", "05", "41")
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+          example: "26"
+      responses:
+        '200':
+          description: List of stops retrieved successfully
+          headers:
+            X-Cache-Status:
+              description: Cache hit or miss status
+              schema:
+                type: string
+                enum: [HIT, MISS]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopsResponse'
+        '404':
+          $ref: '#/components/responses/LineNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/lines/{lineCode}/{stopCode}:
+    get:
+      summary: Get bus arrival time
+      description: Get the estimated arrival time for a specific bus line at a specific stop
+      operationId: getBusArrivalTime
+      tags:
+        - Arrivals
+      parameters:
+        - name: lineCode
+          in: path
+          required: true
+          description: Bus line code
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+          example: "26"
+        - name: stopCode
+          in: path
+          required: true
+          description: Stop code
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+          example: "79"
+      responses:
+        '200':
+          description: Arrival time retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArrivalTimeResponse'
+        '404':
+          $ref: '#/components/responses/StopNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        count:
+          type: integer
+          description: Number of items returned (optional)
+      required:
+        - success
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Error description
+            code:
+              type: string
+              description: Specific error code (optional)
+            details:
+              type: object
+              description: Additional error details (optional)
+          required:
+            - message
+      required:
+        - success
+        - error
+
+    HealthResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            message:
+              type: string
+              example: "API is running"
+            timestamp:
+              type: string
+              format: date-time
+              example: "2025-09-29T10:30:00.000Z"
+
+    BusLine:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Bus line code/number
+          example: "26"
+        name:
+          type: string
+          description: Human-readable line name
+          example: "Altza"
+        url:
+          type: string
+          format: uri
+          description: Official DBUS website URL for this line
+          example: "https://dbus.eus/26-altza/"
+        internal_id:
+          type: string
+          description: Internal identifier used by DBUS system
+          example: "26"
+      required:
+        - code
+        - name
+        - url
+        - internal_id
+
+    BusLinesResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/BusLine'
+            count:
+              type: integer
+              example: 42
+
+    BusStop:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Stop code/number
+          example: "79"
+        name:
+          type: string
+          description: Stop name/location
+          example: "Boulevard 13"
+        internal_id:
+          type: string
+          description: Internal stop identifier used by DBUS system
+          example: "2378"
+      required:
+        - code
+        - name
+        - internal_id
+
+    StopsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/BusStop'
+            count:
+              type: integer
+              example: 25
+
+    ArrivalTime:
+      type: object
+      properties:
+        line:
+          type: string
+          description: The requested bus line code
+          example: "26"
+        stop:
+          type: string
+          description: The requested stop code
+          example: "79"
+        arrival_time:
+          type: integer
+          minimum: 0
+          description: Minutes until bus arrival (0 means arriving now)
+          example: 17
+        unit:
+          type: string
+          enum: [minutes]
+          description: Time unit (always "minutes")
+          example: "minutes"
+      required:
+        - line
+        - stop
+        - arrival_time
+        - unit
+
+    ArrivalTimeResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ArrivalTime'
+
+  responses:
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Maximum requests allowed
+          schema:
+            type: integer
+            example: 100
+        X-RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+            example: 0
+        X-RateLimit-Reset:
+          description: Time when the rate limit window resets
+          schema:
+            type: integer
+            format: unix-timestamp
+        Retry-After:
+          description: Seconds to wait before making another request
+          schema:
+            type: integer
+            example: 900
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              message: "Too many requests, please try again later"
+
+    LineNotFound:
+      description: Bus line not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              message: "Line with code 99 not found"
+
+    StopNotFound:
+      description: Bus stop not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            stopNotFound:
+              summary: Stop code not found
+              value:
+                success: false
+                error:
+                  message: "Stop with ID 999 not found"
+            lineNotFound:
+              summary: Line code not found
+              value:
+                success: false
+                error:
+                  message: "Line with code 99 not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            scrapingFailed:
+              summary: Web scraping failure
+              value:
+                success: false
+                error:
+                  message: "Failed to fetch bus lines"
+                  details:
+                    cause: "Network timeout"
+            browserFailed:
+              summary: Browser launch failure
+              value:
+                success: false
+                error:
+                  message: "Failed to launch browser"
+
+  securitySchemes: {}
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Lines
+    description: Bus lines and stops
+  - name: Arrivals
+    description: Real-time arrival information
+
+externalDocs:
+  description: Full API Documentation
+  url: https://github.com/GlutenFreeSoftware/dbus-api/blob/main/docs/API.md
