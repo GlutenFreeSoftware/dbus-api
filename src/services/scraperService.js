@@ -65,6 +65,62 @@ class ScraperService {
         logger.debug('Security code cached');
     }
 
+    async ensureSecurityCode() {
+        let security = await this.getSecurityCode();
+        
+        if (!security) {
+            logger.debug('Security code not available, will be fetched during next line stops scrape');
+        }
+        
+        return security;
+    }
+
+    async scrapeLineData(lineData) {
+        const browser = await this.getBrowser();
+        
+        try {
+            const page = await browser.newPage();
+            await page.goto(lineData.url);
+            await this.acceptCookies(page);
+            await page.reload();
+            await page.waitForSelector('#select_paradas_1');
+
+            // Extract security code
+            const securityCode = await page.evaluate(() => {
+                const scriptTags = Array.from(document.querySelectorAll('script'));
+                
+                for (const script of scriptTags) {
+                    if (script.textContent.includes('security')) {
+                        const match = script.textContent.match(/security:\s*'(\w+)'/);
+                        if (match) {
+                            return match[1];
+                        }
+                    }
+                }
+                return null;
+            });
+
+            // Extract stops
+            const stops = await page.evaluate(() => {
+                const select = document.querySelector('#select_paradas_1');
+                return Array.from(select.options)
+                    .filter(option => option.textContent.includes('|'))
+                    .map(option => {
+                        const [code, name] = option.textContent.split(' | ');
+                        return {
+                            code: code ? code.trim() : '',
+                            name: name ? name.trim() : '',
+                            internal_id: option.value
+                        };
+                    });
+            });
+
+            return { securityCode, stops };
+        } finally {
+            await browser.close();
+        }
+    }
+
     async getBusLines() {
         const cacheKey = 'bus_lines';
         const operationStart = Date.now();
@@ -133,122 +189,57 @@ class ScraperService {
 
     async getLineStops(lineCode) {
         const cacheKey = `line_stops_${lineCode}`;
+        
+        // Check cache first
         const cachedData = await cacheService.get(cacheKey);
-
         if (cachedData) {
+            logger.debug('Line stops retrieved from cache', { lineCode });
             return cachedData;
         }
 
-        const browser = await this.getBrowser();
+        // Find line data
+        const busLines = await this.getBusLines();
+        const lineData = busLines.find(busLine => 
+            busLine.code.toString() === lineCode.toString()
+        );
 
-        try {
-            const busLines = await this.getBusLines();
-            const lineData = busLines.find(busLine => 
-                busLine.code.toString() === lineCode.toString()
-            );
-
-            if (!lineData) {
-                throw new Error(`Line with code ${lineCode} not found`);
-            }
-
-            const page = await browser.newPage();
-            await page.goto(lineData.url);
-
-            await this.acceptCookies(page);
-            await page.reload();
-            await page.waitForSelector('#select_paradas_1');
-
-            const securityCode = await page.evaluate(() => {
-                const scriptTags = Array.from(document.querySelectorAll('script'));
-                
-                for (const script of scriptTags) {
-                    if (script.textContent.includes('security')) {
-                        const match = script.textContent.match(/security:\s*'(\w+)'/);
-                        if (match) {
-                            return match[1];
-                        }
-                    }
-                }
-                return null;
-            });
-
-            const stops = await page.evaluate(() => {
-                const select = document.querySelector('#select_paradas_1');
-                return Array.from(select.options)
-                    .filter(option => option.textContent.includes('|'))
-                    .map(option => {
-                        const [code, name] = option.textContent.split(' | ');
-                        return {
-                            code: code ? code.trim() : '',
-                            name: name ? name.trim() : '',
-                            internal_id: option.value
-                        };
-                    });
-            });
-
-            // Cache security code separately (global for all lines)
-            if (securityCode) {
-                await this.setSecurityCode(securityCode);
-            }
-
-            // Cache only the stops data (without security code)
-            await cacheService.set(cacheKey, stops);
-            return stops;
-        } finally {
-            await browser.close();
+        if (!lineData) {
+            throw new Error(`Line with code ${lineCode} not found`);
         }
+
+        // Scrape fresh data
+        logger.debug('Scraping line stops from website', { lineCode, url: lineData.url });
+        const { securityCode, stops } = await this.scrapeLineData(lineData);
+
+        // Cache security code globally if found
+        if (securityCode) {
+            await this.setSecurityCode(securityCode);
+        }
+
+        // Cache stops data
+        await cacheService.set(cacheKey, stops);
+        logger.debug('Line stops cached', { lineCode, stopsCount: stops.length });
+        
+        return stops;
     }
 
-    async getBusTimeAtStop(lineNumber, stopCode) {
+    buildTimeRequestParams(lineNumber, stop, security) {
         const now = new Date();
-        const day = now.getDate();
-        const month = now.getMonth() + 1; // Months are zero-based
-        const year = now.getFullYear();
-        const hour = now.getHours();
-        const minute = now.getMinutes();
+        return {
+            action: 'calcula_parada',
+            security: security,
+            linea: lineNumber.toString(),
+            parada: stop.internal_id,
+            dia: now.getDate().toString().padStart(2, '0'),
+            mes: (now.getMonth() + 1).toString().padStart(2, '0'),
+            year: now.getFullYear().toString(),
+            hora: now.getHours().toString().padStart(2, '0'),
+            minuto: now.getMinutes().toString().padStart(2, '0')
+        };
+    }
 
-        const stops = await this.getLineStops(lineNumber.toString());
-        const stop = stops.find(s => s.code === stopCode);
-
-        if (!stop) {
-            throw new Error(`Stop with ID ${stopCode} not found`);
-        }
-
-        // Get security code from global cache
-        let security = await this.getSecurityCode();
-        
-        // If security code is not cached, we need to fetch it
-        if (!security) {
-            // This should trigger a fresh scrape that will cache the security code
-            await cacheService.invalidate(`line_stops_${lineNumber}`);
-            await this.getLineStops(lineNumber.toString());
-            security = await this.getSecurityCode();
-            
-            if (!security) {
-                throw new Error('Security code not found');
-            }
-        }
-
-        const response = await fetch(DBUS_AJAX_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-                action: 'calcula_parada',
-                security: security,
-                linea: lineNumber.toString(),
-                parada: stop.internal_id,
-                dia: day.toString().padStart(2, '0'),
-                mes: month.toString().padStart(2, '0'),
-                year: year.toString(),
-                hora: hour.toString().padStart(2, '0'),
-                minuto: minute.toString().padStart(2, '0')
-            })
-        });
-
-        const result = await response.text();
-        const dom = new JSDOM(result);
+    parseTimeResponse(responseText, lineNumber) {
+        const dom = new JSDOM(responseText);
         const doc = dom.window.document;
 
         const listItems = Array.from(doc.querySelectorAll('#prox_lle ul li'))
@@ -262,14 +253,19 @@ class ScraperService {
             throw new Error('Bus time not found');
         }
 
+        return this.extractTimeFromText(requestedLine);
+    }
+
+    extractTimeFromText(timeText) {
         // Match both formats: "HH:MM" and "X min"
-        const timeMatch = requestedLine.match(/(\d{2}:\d{2})/);
-        const minutesMatch = requestedLine.match(/(\d+)\s*min/);
+        const timeMatch = timeText.match(/(\d{2}:\d{2})/);
+        const minutesMatch = timeText.match(/(\d+)\s*min/);
 
         if (timeMatch) {
             // Calculate how much time is left until the bus arrives
+            const now = new Date();
             const [hours, minutes] = timeMatch[1].split(':').map(Number);
-            const busTime = new Date(year, month - 1, day, hours, minutes);
+            const busTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
             const timeDiff = busTime - now;
             const minutesDiff = Math.floor(timeDiff / 60000);
             return minutesDiff;
@@ -277,7 +273,52 @@ class ScraperService {
             return parseInt(minutesMatch[1], 10);
         }
 
-        throw new Error('Bus time not found');
+        throw new Error('Bus time format not recognized');
+    }
+
+    async getBusTimeAtStop(lineNumber, stopCode) {
+        // Get line stops and find the specific stop
+        const stops = await this.getLineStops(lineNumber.toString());
+        const stop = stops.find(s => s.code === stopCode);
+
+        if (!stop) {
+            throw new Error(`Stop with ID ${stopCode} not found`);
+        }
+
+        // Ensure we have a valid security code
+        let security = await this.ensureSecurityCode();
+        
+        // If no security code available, fetch fresh data
+        if (!security) {
+            logger.debug('Security code not available, fetching fresh data');
+            await cacheService.invalidate(`line_stops_${lineNumber}`);
+            await this.getLineStops(lineNumber.toString());
+            security = await this.getSecurityCode();
+            
+            if (!security) {
+                throw new Error('Security code not found');
+            }
+        } else {
+            logger.debug('Using cached security code');
+        }
+
+        // Make API request to get bus times
+        const requestParams = this.buildTimeRequestParams(lineNumber, stop, security);
+        const response = await fetch(DBUS_AJAX_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams(requestParams)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        // Parse response and extract time
+        const responseText = await response.text();
+        return this.parseTimeResponse(responseText, lineNumber);
     }
 }
 
