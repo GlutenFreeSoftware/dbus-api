@@ -257,22 +257,56 @@ class ScraperService {
     }
 
     extractTimeFromText(timeText) {
+        logger.debug('Extracting time from text', { timeText });
+        
         // Match both formats: "HH:MM" and "X min"
         const timeMatch = timeText.match(/(\d{2}:\d{2})/);
         const minutesMatch = timeText.match(/(\d+)\s*min/);
 
         if (timeMatch) {
+            logger.debug('Found time format HH:MM', { timeFound: timeMatch[1] });
+            
             // Calculate how much time is left until the bus arrives
             const now = new Date();
             const [hours, minutes] = timeMatch[1].split(':').map(Number);
-            const busTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+            let busTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+            
+            logger.debug('Parsed bus time', { 
+                now: now.toISOString(), 
+                busTime: busTime.toISOString(),
+                hours, 
+                minutes 
+            });
+            
+            // If the bus time is in the past (earlier today), assume it's tomorrow
+            if (busTime <= now) {
+                busTime.setDate(busTime.getDate() + 1);
+                logger.debug('Bus time was in the past, moved to tomorrow', { 
+                    newBusTime: busTime.toISOString() 
+                });
+            }
+            
             const timeDiff = busTime - now;
             const minutesDiff = Math.floor(timeDiff / 60000);
-            return minutesDiff;
+            const result = Math.max(0, minutesDiff);
+            
+            logger.debug('Time calculation completed', { 
+                timeDiff, 
+                minutesDiff, 
+                result 
+            });
+            
+            return result;
         } else if (minutesMatch) {
-            return parseInt(minutesMatch[1], 10);
+            const result = parseInt(minutesMatch[1], 10);
+            logger.debug('Found minutes format', { 
+                minutesFound: minutesMatch[1], 
+                result 
+            });
+            return result;
         }
 
+        logger.error('Bus time format not recognized', { timeText });
         throw new Error('Bus time format not recognized');
     }
 

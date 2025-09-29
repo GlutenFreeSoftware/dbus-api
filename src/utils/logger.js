@@ -7,15 +7,40 @@ const consoleFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
     winston.format.colorize(),
-    winston.format.printf(({ timestamp, level, message, stack, service, userId, ip, method, url, responseTime }) => {
-        const meta = [];
-        if (service) meta.push(`service=${service}`);
-        if (userId) meta.push(`userId=${userId}`);
-        if (ip) meta.push(`ip=${ip}`);
-        if (method && url) meta.push(`${method} ${url}`);
-        if (responseTime) meta.push(`${responseTime}ms`);
+    winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
+        // Remove winston's internal fields
+        const { service, version, env, ...customMeta } = meta;
         
-        const metaStr = meta.length > 0 ? ` [${meta.join(' | ')}]` : '';
+        const metaParts = [];
+        
+        // Add service info if available
+        if (service && service !== 'dbus-api') metaParts.push(`service=${service}`);
+        
+        // Add specific fields if they exist
+        if (customMeta.userId) metaParts.push(`userId=${customMeta.userId}`);
+        if (customMeta.ip) metaParts.push(`ip=${customMeta.ip}`);
+        if (customMeta.method && customMeta.url) metaParts.push(`${customMeta.method} ${customMeta.url}`);
+        if (customMeta.responseTime) metaParts.push(`${customMeta.responseTime}ms`);
+        
+        // Add all remaining meta fields
+        const remainingMeta = { ...customMeta };
+        delete remainingMeta.userId;
+        delete remainingMeta.ip;
+        delete remainingMeta.method;
+        delete remainingMeta.url;
+        delete remainingMeta.responseTime;
+        delete remainingMeta.stack;
+        delete remainingMeta.errorName;
+        delete remainingMeta.errorMessage;
+        
+        // Format remaining meta as key=value pairs
+        Object.entries(remainingMeta).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                metaParts.push(`${key}=${JSON.stringify(value)}`);
+            }
+        });
+        
+        const metaStr = metaParts.length > 0 ? ` [${metaParts.join(' | ')}]` : '';
         return `${timestamp} ${level}: ${message}${metaStr}${stack ? '\n' + stack : ''}`;
     })
 );
