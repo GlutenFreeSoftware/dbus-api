@@ -122,17 +122,19 @@ src/
 │   ├── lineController.js       # Bus line endpoints logic
 │   └── stopController.js       # Bus stop endpoints logic
 ├── middleware/
-│   └── errorHandler.js         # Error handling middleware
+│   ├── errorHandler.js         # Error handling middleware
+│   └── logging.js              # Request logging middleware
 ├── routes/
 │   ├── api/
 │   │   └── v1/
 │   │       ├── index.js        # API v1 routes
-│   │       ├── lines.js        # Lines routes
-│   │       └── stops.js        # Stops routes
+│   │       └── lines.js        # Lines routes
 │   └── index.js                # Main routes
 ├── services/
 │   ├── cacheService.js         # Caching functionality
 │   └── scraperService.js       # Web scraping logic
+├── utils/
+│   └── logger.js               # Logging utilities
 └── app.js                      # Express app configuration
 ```
 
