@@ -49,41 +49,66 @@ class ScraperService {
     async getBusLines() {
         const cacheKey = 'bus_lines';
         const operationStart = Date.now();
-        const cachedData = await cacheService.get(cacheKey);
-
-        if (cachedData) {
-            return cachedData;
-        }
-
-        const browser = await this.getBrowser();
-
+        
         try {
-            const page = await browser.newPage();
-            await page.goto(DBUS_BASE_URL);
+            const cachedData = await cacheService.get(cacheKey);
 
-            await this.acceptCookies(page);
-            await page.reload();
-            await page.waitForSelector('#desplegable-lineas');
+            if (cachedData) {
+                logger.scraperOperation('getBusLines', Date.now() - operationStart, true, null, { 
+                    source: 'cache',
+                    linesCount: cachedData.length 
+                });
+                return cachedData;
+            }
 
-            const options = await page.evaluate(() => {
-                const select = document.querySelector('#desplegable-lineas');
-                return Array.from(select.options)
-                    .filter(option => option.textContent.includes('|'))
-                    .map(option => {
-                        const [code, name] = option.textContent.split(' | ');
-                        return {
-                            code: code ? code.trim() : '',
-                            name: name ? name.trim() : '',
-                            url: option.getAttribute('enlace'),
-                            internal_id: option.value
-                        };
-                    });
-            });
+            logger.debug('Fetching bus lines from DBUS website');
+            const response = await fetch(`${DBUS_BASE_URL}es`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const html = await response.text();
+
+            // Extract lineas_front from the HTML content
+            const match = html.match(/lineas_front=JSON\.parse\('(.+?)'\);/);
+            if (!match) {
+                throw new Error('Could not find lineas_front data in HTML');
+            }
+
+            const jsonString = match[1].replace(/\\\//g, '/').replace(/\\"/g, '"');
+            const linesData = JSON.parse(jsonString);
+            
+            const options = linesData
+                .filter(item => item.texto && item.texto.includes('|'))
+                .map(item => {
+                    // Handle both regular spaces and non-breaking spaces after the pipe
+                    const [code, name] = item.texto.split(/\s*\|\s*/);
+                    return {
+                        code: code ? code.trim() : '',
+                        name: name ? name.trim() : '',
+                        url: item.enlace,
+                        internal_id: item.valor
+                    };
+                });
 
             await cacheService.set(cacheKey, options);
+            
+            const duration = Date.now() - operationStart;
+            logger.scraperOperation('getBusLines', duration, true, null, { 
+                source: 'web',
+                linesCount: options.length,
+                htmlSize: html.length
+            });
+            
             return options;
-        } finally {
-            await browser.close();
+        } catch (error) {
+            const duration = Date.now() - operationStart;
+            logger.scraperOperation('getBusLines', duration, false, error, { 
+                source: 'web'
+            });
+            logger.error('Failed to fetch bus lines', error);
+            throw error;
         }
     }
 
