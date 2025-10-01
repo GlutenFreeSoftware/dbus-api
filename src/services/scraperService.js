@@ -246,7 +246,7 @@ class ScraperService {
             .map(item => item.textContent.trim());
         
         const requestedLine = listItems.find(item => 
-            item.includes(`Linea ${lineNumber}:`)
+            item.includes(`Linea ${parseInt(lineNumber, 10)}:`)
         );
 
         if (!requestedLine) {
